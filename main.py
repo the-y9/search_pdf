@@ -8,8 +8,12 @@ LOGICAL_OPS = {"!and", "!or"}
 pdfs = 0
 
 # ---------- QUERY PRECOMPILATION ----------
+def re_pattern(tok, word_boundary: bool = True):
+    if word_boundary:
+        return r"\b" + re.escape(tok).replace(r"\*", ".*").replace(r"\?", ".") + r"\b"
+    return re.escape(tok).replace(r"\*", ".*").replace(r"\?", ".")
 
-def compile_query(query: str, exact_phrase: bool = False) -> list:
+def compile_query(query: str, word_boundary: bool = True, exact_phrase: bool = False) -> list:
     compiled = []
     operator = "!and"
 
@@ -36,7 +40,7 @@ def compile_query(query: str, exact_phrase: bool = False) -> list:
             if tok is None:
                 operator = op  # operator token, applies to next
                 continue
-            regex_pattern = r"\b" + re.escape(tok).replace(r"\*", ".*").replace(r"\?", ".") + r"\b"
+            regex_pattern = re_pattern(tok, word_boundary)
             final_compiled.append((operator, re.compile(regex_pattern, re.IGNORECASE)))
             operator = "!and"  # reset after use
         return final_compiled
@@ -47,7 +51,7 @@ def compile_query(query: str, exact_phrase: bool = False) -> list:
         if token_l in LOGICAL_OPS:
             operator = token_l
             continue
-        regex_pattern = r"\b" + re.escape(token).replace(r"\*", ".*").replace(r"\?", ".") + r"\b"
+        regex_pattern = re_pattern(token, word_boundary)
         compiled.append((operator, re.compile(regex_pattern, re.IGNORECASE)))
         operator = "!and"
 
@@ -83,11 +87,11 @@ def iter_pdfs(folder_path: str):
             yield file
 
 
-def find_pdfs(folder_path: str, query: str, exact_phrase: bool = True) -> List[str]:
+def find_pdfs(folder_path: str, query: str, word_boundary: bool = True, exact_phrase: bool = True) -> List[str]:
     """
     Scan PDFs and return paths where query matches anywhere.
     """
-    compiled_query = compile_query(query, exact_phrase=exact_phrase)
+    compiled_query = compile_query(query, word_boundary, exact_phrase=exact_phrase)
     matches: list[str] = []
 
     for pdf_path in iter_pdfs(folder_path):
@@ -110,7 +114,7 @@ if __name__ == "__main__":
     query = "Report No. 02 !or India"
 
     start = time()
-    results = find_pdfs(folder, query)
+    results = find_pdfs(folder, query, word_boundary= True)
 
     print("\nMatched PDFs:", len(results), "/", pdfs)
     print("\n".join(results))
