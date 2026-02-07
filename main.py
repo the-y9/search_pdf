@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 from typing import List
-from PyPDF2 import PdfReader
+import fitz  # PyMuPDF
 from time import time
 
 LOGICAL_OPS = {"!and", "!or"}
@@ -36,7 +36,7 @@ def compile_query(query: str, exact_phrase: bool = False) -> list:
             if tok is None:
                 operator = op  # operator token, applies to next
                 continue
-            regex_pattern = re.escape(tok).replace(r"\*", ".*").replace(r"\?", ".")
+            regex_pattern = r"\b" + re.escape(tok).replace(r"\*", ".*").replace(r"\?", ".") + r"\b"
             final_compiled.append((operator, re.compile(regex_pattern, re.IGNORECASE)))
             operator = "!and"  # reset after use
         return final_compiled
@@ -47,7 +47,7 @@ def compile_query(query: str, exact_phrase: bool = False) -> list:
         if token_l in LOGICAL_OPS:
             operator = token_l
             continue
-        regex_pattern = re.escape(token).replace(r"\*", ".*").replace(r"\?", ".")
+        regex_pattern = r"\b" + re.escape(token).replace(r"\*", ".*").replace(r"\?", ".") + r"\b"
         compiled.append((operator, re.compile(regex_pattern, re.IGNORECASE)))
         operator = "!and"
 
@@ -79,7 +79,7 @@ def iter_pdfs(folder_path: str):
     folder = Path(folder_path)
     for file in folder.iterdir():
         if file.is_file() and file.suffix.lower() == ".pdf":
-            pdfs+=1
+            pdfs += 1
             yield file
 
 
@@ -92,8 +92,9 @@ def find_pdfs(folder_path: str, query: str, exact_phrase: bool = True) -> List[s
 
     for pdf_path in iter_pdfs(folder_path):
         try:
-            reader = PdfReader(pdf_path)
-            full_text = " ".join(page.extract_text() or "" for page in reader.pages)
+            doc = fitz.open(pdf_path)
+            full_text = " ".join(page.get_text() for page in doc)
+            doc.close()
             if full_text and match_text(full_text, compiled_query):
                 matches.append(str(pdf_path))
         except Exception as exc:
@@ -105,13 +106,12 @@ def find_pdfs(folder_path: str, query: str, exact_phrase: bool = True) -> List[s
 # ---------- EXAMPLE ----------
 
 if __name__ == "__main__":
-    folder = "data" # dir containing pdfs
-    query = "Report No. 02 !and 06-Jan-26"
-    
-    start = time()
+    folder = "data"  # dir containing pdfs
+    query = "Report No. 02 !or India"
 
+    start = time()
     results = find_pdfs(folder, query)
 
     print("\nMatched PDFs:", len(results), "/", pdfs)
-    print("\n".join(results) )
+    print("\n".join(results))
     print(f"Time: {time()-start:.2f}s")
